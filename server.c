@@ -1,7 +1,4 @@
-/*
-    C socket server example, handles multiple clients using threads
-*/
- 
+
 #include <stdio.h>
 #include <string.h>    //strlen
 #include <stdlib.h>    //strlen
@@ -19,46 +16,47 @@
 
 
 
-char *ROOT; 
-//the thread function
-void *connection_handler(int n);
+char *root_dir; 
 
 int socket_creation(char* port)
 {
+    struct addrinfo server;
+    struct addrinfo *res, *p;
     int socket_desc;
-    struct addrinfo hints, *res, *p;
 
+
+    memset (&server, 0, sizeof(server));
     // getaddrinfo for host
-    memset (&hints, 0, sizeof(hints));
-    hints.ai_family = AF_INET;
-    hints.ai_socktype = SOCK_STREAM;
-    hints.ai_flags = AI_PASSIVE;
+    server.ai_family = AF_INET;
+    server.ai_socktype = SOCK_STREAM;
+    server.ai_flags = AI_PASSIVE;
 
-    if (getaddrinfo( NULL, port, &hints, &res) != 0)
+    if (getaddrinfo( NULL, port, &server, &res) != 0)
     {
-        perror ("getaddrinfo() error");
+        printf("get address error");
         exit(1);
     }
 
     for (p = res; p!=NULL; p=p->ai_next)
     {
-        socket_desc = socket (p->ai_family, p->ai_socktype, 0);
+        socket_desc = socket(p->ai_family, p->ai_socktype, 0);
         if (socket_desc == -1) continue;
         if (bind(socket_desc, p->ai_addr, p->ai_addrlen) == 0) break;
+        printf("count this! \n");
     }
 
     if (p==NULL)
     {
-        perror ("socket() or bind()");
+        printf ("socket() or bind()");
         exit(1);
     }
 
     freeaddrinfo(res);
 
     // listen for incoming connections
-    if ( listen (socket_desc, 1000000) != 0 )
+    if ( listen (socket_desc, 50) != 0 )
     {
-        perror("listen() error");
+        printf("listen error");
         exit(1);
     }
 
@@ -68,38 +66,36 @@ int socket_creation(char* port)
 
 
 //client connection
-void *connection_handler(int n)
+void *connection_handler(int sock_client)
 {
     
-    char mesg[99999], *reqline[3], data_to_send[BYTES], path[99999];
+    char recv_buf[MESSAGE_LENGTH], *http_cmd[3], data_to_send[BYTES], path_to_file[MESSAGE_LENGTH];
 
-    int rcvd, fd, bytes_read;
+    int s, file, bytes_read;
 
-    memset( (void*)mesg, (int)'\0', 99999 );
+    bzero(recv_buf,sizeof(recv_buf));
 
-    int sock_client = n;
+    s = recv(sock_client, recv_buf, MESSAGE_LENGTH, 0);
 
-    rcvd=recv(sock_client, mesg, MESSAGE_LENGTH, 0);
-
-    if (rcvd<0)
+    if( s < 0 )
     {    
         printf("Recieve error\n");
     }
-    else if (rcvd==0)    // receive socket closed
+    else if (s == 0)
     { 
         printf("Client disconnected (recv returns zero).\n");
     }
-    else    // message received
+    else
     {
-        printf("%s", mesg);
-        reqline[0] = strtok (mesg, " \t\n");
-        if ( strncmp(reqline[0], "GET\0", 4)==0 )
+        printf("%s", recv_buf);
+        http_cmd[0] = strtok (recv_buf, " \t\n");
+        if ( strncmp(http_cmd[0], "GET\0", 4)==0 )
         {
-            reqline[1] = strtok (NULL, " \t");
-            reqline[2] = strtok (NULL, " \t\n");
+            http_cmd[1] = strtok (NULL, " \t");
+            http_cmd[2] = strtok (NULL, " \t\n");
             
-            int http_1_0 = strncmp( reqline[2], "HTTP/1.0", 8);
-            int http_1_1 = strncmp( reqline[2], "HTTP/1.1", 8);
+            int http_1_0 = strncmp( http_cmd[2], "HTTP/1.0", 8);
+            int http_1_1 = strncmp( http_cmd[2], "HTTP/1.1", 8);
 
             if ( http_1_0!=0 && http_1_1!=0 )
             {
@@ -107,21 +103,24 @@ void *connection_handler(int n)
             }
             else
             {
-                int check_default =strncmp(reqline[1], "/\0", 2);
+                int check_default =strncmp(http_cmd[1], "/\0", 2);
 
                 if ( check_default ==0 )
                 {    
-                    reqline[1] = "/index.html";        
+                    http_cmd[1] = "/index.html";        
                 }
 
-                strcpy(path, ROOT);
-                strcpy(&path[strlen(ROOT)], reqline[1]);
-                printf("file: %s\n", path);
+                strcpy(path_to_file, root_dir);
 
-                if ( (fd=open(path, O_RDONLY))!=-1 )    //FILE FOUND
+                printf("Path - %s\n",path_to_file);
+                strcpy(&path_to_file[strlen(root_dir)], http_cmd[1]);
+                
+                printf("file: %s\n", path_to_file);
+
+                if ( (file=open(path_to_file, O_RDONLY))!=-1 )    //FILE FOUND
                 {
                     send(sock_client, "HTTP/1.0 200 OK\n\n", 17, 0);
-                    while ( (bytes_read=read(fd, data_to_send, BYTES))>0 )
+                    while ( (bytes_read=read(file, data_to_send, BYTES))>0 )
                     {    
                         write (sock_client, data_to_send, bytes_read);
                     }
@@ -143,7 +142,7 @@ int main(int argc , char *argv[])
     struct sockaddr_in server , client;
      
     char port[6];
-    ROOT = getenv("PWD"); //getting the root directory and storing it in variable ROOT
+    root_dir = getenv("PWD"); //getting the root directory and storing it in variable ROOT
     strcpy(port,"10000");
 
     socket_desc = socket_creation(port);
