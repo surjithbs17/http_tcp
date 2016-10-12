@@ -18,6 +18,8 @@
 
 char *root_dir; 
 
+
+
 int socket_creation(char* port)
 {
     struct addrinfo server;
@@ -62,6 +64,144 @@ int socket_creation(char* port)
 
     return socket_desc;
 
+}
+
+
+char* data_finder(char* format)
+{
+    int port,content_type;
+    char parsed_string[10000];
+    char line_parsed[200];
+    char* content_parsed = malloc(200);
+    char* content_parsed_1 = malloc(200);
+    char* root_string = malloc(200);
+    char* token;
+    token = "1";
+
+
+    //printf("%s\n",format );
+    char data[100];
+    strcpy(data,".");
+    strcpy(&data[1],format);
+
+
+    //printf("%s\n",data );
+
+    FILE *f;
+    bzero(content_parsed,sizeof(content_parsed));
+    //bzero(content_parsed[1],sizeof(content_parsed[1]));   
+    f = fopen("ws.conf", "r");
+
+    port = strcmp(format,"port");
+    if(port == 0)
+    {
+        strcpy(data,"Listen");
+    }
+
+    int root = strcmp(format,"root");
+    if(root == 0)
+    {
+        strcpy(data,"DocumentRoot");
+    }
+
+
+
+    while(token != NULL)
+    {
+        token = fgets(parsed_string,10000,f);
+        //printf(" -- %s",parsed_string);
+        if(parsed_string[0] == '#')
+        {   
+            //printf("It is a comment \n");
+            continue;
+        }
+        else
+        {
+            sscanf(parsed_string,"%s %s",content_parsed,content_parsed_1);
+            //printf("Parsed 1 \n\n%s\nParsed 2 \n\n%s\n",content_parsed,content_parsed_1);
+            int comp = strcmp(content_parsed,data);
+            if(comp == 0)
+            {
+                if(root == 0)
+                {
+                    //sscanf(content_parsed_1,"\"%s \"",root_string);
+                    root_string = strtok(content_parsed_1,"\"");
+                    strcpy(content_parsed_1,root_string);
+
+                }   
+                return content_parsed_1;
+                break;
+            }
+
+
+
+        }
+    }
+
+
+}
+
+
+char* find_the_file_format(char *entire_path)
+{
+    
+    char *token_string = malloc(1000);
+    char *recent_token = malloc(1000);
+    char *recent_token_format = malloc(1000);
+    char *latest_token = malloc(1000);
+    bzero(token_string,sizeof(token_string));
+    const char s[2] = "/";
+    
+    token_string = strtok(entire_path, s);
+
+    while( token_string != NULL ) 
+    {
+        //printf( "%s\n", token_string );
+    
+      //memset (token_string, 0, sizeof(token_string));
+        token_string = strtok(NULL, "/");
+        if(token_string != NULL)
+        {
+            strcpy(recent_token,token_string);
+        }
+      //printf("%s\n",token_string );
+    }
+
+    recent_token_format = strtok(recent_token, "."); 
+    while(recent_token_format != NULL)
+    { 
+        recent_token_format = strtok(NULL, ".");
+        
+        if(recent_token_format != NULL)
+        {
+            strcpy(latest_token,recent_token_format);
+        }
+    }
+
+    //printf("\nToken -- %s\n%s\n",recent_token,recent_token_format);
+    return latest_token;
+}
+
+
+char* content_type(char* path)
+{
+    
+    //printf("%s\n",path );
+    char* type = find_the_file_format(path);
+    char* type_string = data_finder(type);
+    char* final_string = malloc(200);
+    
+    //printf("%s\n",type_string );
+    strcpy(final_string,"Content-Type: ");
+
+    //printf("%s\n",final_string );
+    strcpy(final_string+14,type_string);
+    strcpy(final_string+(strlen(final_string)),"\n\n");
+
+
+    //printf("%s\n",final_string );
+
+    return final_string;
 }
 
 
@@ -113,16 +253,22 @@ void *connection_handler(int sock_client)
                 strcpy(path_to_file, root_dir);
 
                 printf("Path - %s\n",path_to_file);
+
                 strcpy(&path_to_file[strlen(root_dir)], http_cmd[1]);
                 
                 printf("file: %s\n", path_to_file);
 
                 if ( (file=open(path_to_file, O_RDONLY))!=-1 )    //FILE FOUND
                 {
-                    send(sock_client, "HTTP/1.0 200 OK\n\n", 17, 0);
+                    send(sock_client, "HTTP/1.0 200 OK\n", 16, 0);
+
+                    char* content_string = content_type(path_to_file);
+                    printf("\n\n\n\n\nContent String%s\n",content_string);
+                    send(sock_client, content_string, strlen(content_string),0);
                     while ( (bytes_read=read(file, data_to_send, BYTES))>0 )
                     {    
                         write (sock_client, data_to_send, bytes_read);
+                        printf("%s\n",data_to_send);
                     }
                 }
                 else    write(sock_client, "HTTP/1.0 404 Not Found\n", 23); //FILE NOT FOUND
@@ -141,41 +287,34 @@ int main(int argc , char *argv[])
     int socket_desc , client_sock , c , *new_sock;
     struct sockaddr_in server , client;
      
-    char port[6];
-    root_dir = getenv("PWD"); //getting the root directory and storing it in variable ROOT
-    strcpy(port,"10000");
+    char* port;
+    root_dir = data_finder("root"); //getting the root directory and storing it in variable ROOT
 
+
+    //strcpy(port,"10000");
+    port = data_finder("port");
     socket_desc = socket_creation(port);
     int optval = 1;
     setsockopt(socket_desc, SOL_SOCKET, SO_REUSEADDR,(const void *)&optval , sizeof(int));
 
     
-    c = sizeof(struct sockaddr_in); 
+     
+    int len = sizeof(client);
 
-    while(1)
+    while((client_sock = accept(socket_desc, (struct sockaddr *)&client, (socklen_t*)&len)) > 0)
     {
         
-        int len = sizeof(client);
-
-        if((client_sock = accept(socket_desc, (struct sockaddr *)&client, (socklen_t*)&len)) < 0)
-        {
-            puts("Connection Error");
-            break;    
-        }
-        
-         
+                 
         pthread_t sniffer_thread;
         
-
         if( pthread_create( &sniffer_thread , NULL ,  connection_handler , client_sock) < 0)
         {
             perror("could not create thread");
-            return 1;
+            exit(1);
         }
          
-        //Now join the thread , so that we dont terminate before the thread
-        //pthread_join( sniffer_thread , NULL);
         puts("Handler assigned");
+
     }
      
     if (client_sock < 0)
