@@ -2,9 +2,81 @@
 #include <string.h>    //strlen
 #include <stdlib.h>    //strlen
 #include <fcntl.h>
+#include <sys/stat.h>
+#define MESSAGE_LENGTH 500
+
+char* error_handling(int err_no,int reason_no,int version_no,char* arg, int socket)
+{
+
+	char* version[2]; 
+	char* reason[3];
+	char* error_string = malloc(MESSAGE_LENGTH);
+	char* http_string = malloc(MESSAGE_LENGTH);
+	reason[0] = "Method";
+	reason[1] = "URL";
+	reason[2] = "HTTP-Version";
+	version[0] = "HTTP/1.0";
+	version[1] = "HTTP/1.1";
+	printf("Passed 2\n");
+	bzero(error_string,sizeof(error_string));
+	bzero(http_string,sizeof(http_string));
 
 
+	switch(err_no)
+	{
+		case 400:
+		{
+			printf("Passed 3\n");
+			sprintf(http_string,"%s 400 Bad Request\n",version[version_no]);
+			//printf("Passed 4\n");
+			send(socket, http_string, 25, 0);
+			sprintf(error_string,"<html><body> 400	Bad	Request	Reason:	Invalid	%s %s</body></html>",reason[reason_no],arg);
+			send(socket,error_string,strlen(error_string)+1,0);
+			printf("Error code 400!\n");
 
+			break;
+		}
+		case 404:
+		{
+			sprintf(http_string,"%s 404 Not Found\n",version[version_no]);
+			send(socket, http_string, 23, 0);
+			sprintf(error_string,"<html><body>404 Not Found	Reason URL does not exist: Invalid	%s %s</body></html>",reason[reason_no],arg);
+			send(socket,error_string,strlen(error_string)+1,0);
+			printf("Error code 404!\n");
+			break;
+		}
+		case 501:
+		{
+			sprintf(http_string,"%s 501 Not Implemented\n",version[version_no]);
+			send(socket, http_string, 29, 0);
+			sprintf(error_string,"<html><body> Not Implemented: Invalid	File %s</body></html>",arg);
+			send(socket,error_string,strlen(error_string)+1,0);
+			printf("Error code 501!\n");
+			break;
+		}
+
+		case 500:
+		{
+			sprintf(http_string,"%s 500 Internal Server	Error: cannot allocate memory\n",version[version_no]);
+			send(socket, http_string, 59, 0);
+			printf("Error code 500!\n");
+			send(socket,error_string,strlen(error_string)+1,0);
+			break;
+		}
+
+		default:
+		{
+
+			send(socket, "HTTP/1.1 400 Bad Request\n", 25, 0);
+			sprintf(error_string,"<html><body> 400	Bad	Request	Reason:	Invalid	%s %s</body></html>",reason[reason_no],arg);
+			send(socket,error_string,strlen(error_string)+1,0);
+			printf("Error code Default!\n");
+		}
+	}
+
+	printf("Error Handled!\n");
+
+}
 
 
 
@@ -128,6 +200,40 @@ char* find_the_file_format(char *entire_path)
 	return latest_token;
 }
 
+char* content_length(char* path)
+{
+	char* final_string = malloc(200);
+	char* length_string = malloc(200);
+	bzero(final_string,sizeof(final_string));
+	bzero(length_string,sizeof(length_string));
+	strcpy(final_string,"Content-Length: ");
+	
+	//struct stat st;
+	//stat(path, &st);
+	//long long int size = st.st_size;
+
+
+
+	FILE *get_file = fopen(path,"r+");
+	if(get_file == NULL)
+    {
+    	printf("\nError: File open %s\n",path);
+    }
+
+
+
+    fseek(get_file,0,SEEK_END);  //Routing to check the file size
+    long filesize = ftell(get_file);
+    rewind(get_file);
+	fclose(get_file);
+
+	sprintf(length_string,"%lld\r\n",filesize);
+
+	strcpy(&final_string[16],length_string);
+
+	return final_string;
+
+}
 
 char* content_type(char* path)
 {
@@ -149,24 +255,59 @@ char* content_type(char* path)
 	return final_string;
 }
 
+void content_headers(char* path,int socket)
+{
+	char* content_string = content_type(path);
+   	send(socket, content_string, strlen(content_string),0);
+    char* content_length = content_length(path);
+    send(socket, content_length, strlen(content_length),0);
+}
+
 int main()
 {
 	//char* value = data_finder(".html");
-	
+	/*
 	char path[200] = "im/a/ges/exam.hel.lo.gif";
 	
 	char* format = find_the_file_format(path);
 	//char* search = "DocumentRoot";
 	printf("\n%s\n",format);
 
-	char* value = data_finder("root");
+	char* value = data_finder("KeepaliveTime");
 	printf("\n%s\n",value);
 
 	strcpy(path,"im/a/ges/exam.gif");
 	
 	char* port = content_type(path);
 
+
 	printf("%s\n",port);
 
+
+
+	char* keepalive_string = strstr("Connection: ",recv_buf);
+    printf(RED "Keep Aluve %s \n\n\n\n" RESET, keepalive_string );
+
 	//printf("%s",config);
+*/	char *path_to_file = malloc(400);
+    bzero(path_to_file,sizeof(path_to_file));
+    char req[200] = "/index.html";
+    printf("Passed 1\n");
+    //error_handling(400,1,0,req,5);
+    char*  root_dir = data_finder("root");
+     printf("Passed 1\n");
+
+                strcpy(path_to_file, root_dir);
+                 printf("Passed 1\n");
+
+                printf("Path - %s\n",path_to_file);
+
+                strcpy(&path_to_file[strlen(root_dir)], req);
+                  printf("Path - %s\n",path_to_file);
+                 printf("Passed 1\n");
+
+    printf("%s\n",content_length(path_to_file));
+
+
+
 }

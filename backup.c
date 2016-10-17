@@ -7,9 +7,7 @@
 #include <unistd.h>    //write
 #include <pthread.h> //for threading , link with lpthread
 #include <fcntl.h>
-#include <sys/syscall.h>
 #include <netdb.h>
-#include <sys/types.h>
 #include <sys/stat.h>
 
 
@@ -46,31 +44,6 @@ struct data_for_tit {
 };
 
 
-
-char* getFilesize(const char* filename) 
-{
-    char* size_string = malloc(100);
-    bzero(size_string,sizeof(size_string));
-    char* final_string = malloc(200);
-    bzero(final_string,sizeof(final_string));
-    strcpy(final_string,"Content-Length: ");
- 
-
-
-
-
-    struct stat st;
-    if(stat(filename, &st) != 0) {
-        return 0;
-    }
-    size_t size =  st.st_size;
-    sprintf(size_string,"%zu\n\n",size);
-    //sprintf(length_string,"%lld\r\n",filesize);
-    strcpy(&final_string[16],size_string);
-    return final_string;
-}
-
-
 char* error_handling(int err_no,int reason_no,int version_no,char* arg, int socket)
 {
 
@@ -93,10 +66,10 @@ char* error_handling(int err_no,int reason_no,int version_no,char* arg, int sock
         case 400:
         {
             //printf("Passed 3\n");
-            sprintf(http_string,"%s 400 Bad Request\n\n",version[version_no]);
+            sprintf(http_string,"%s 400 Bad Request\r\n",version[version_no]);
             //printf("Passed 4\n");
             write(socket, http_string, 26);
-            sprintf(error_string,"<!DOCTYPE html>\r\n<html><body> 400 Bad Request Reason: Invalid %s %s</body></html>\r\n\n",reason[reason_no],arg);
+            sprintf(error_string,"<!DOCTYPE html>\r\n<html><body> 400 Bad Request Reason: Invalid %s %s</body></html>\r\n",reason[reason_no],arg);
             write(socket,error_string,strlen(error_string)+1);
             printf("Error code 400!\n");
 
@@ -104,19 +77,18 @@ char* error_handling(int err_no,int reason_no,int version_no,char* arg, int sock
         }
         case 404:
         {
-            sprintf(http_string,"%s 404 Not Found\r\n\n",version[version_no]);
+            sprintf(http_string,"%s 404 Not Found\r\n",version[version_no]);
             write(socket, http_string, 24);
-            sprintf(error_string,"<html><body><H1>Hello %s world</H1></body></html>",arg);
-            //sprintf(error_string,"<!DOCTYPE html>\r\n<html>\r\n<body>\r\n<h1>404 Not Found Reason URL does not exist: Invalid  %s %s</h1>\r\n\n</body>\r\n</html>\r\n\n",reason[reason_no],arg);
-            write(socket,error_string,strlen(error_string));
+            sprintf(error_string,"<!DOCTYPE html>\r\n<html><body>404 Not Found Reason URL does not exist: Invalid  %s %s</body></html>\r\n",reason[reason_no],arg);
+            write(socket,error_string,strlen(error_string)+1);
             printf("Error code 404!\n");
             break;
         }
         case 501:
         {
-            sprintf(http_string,"%s 501 Not Implemented\r\n\n",version[version_no]);
+            sprintf(http_string,"%s 501 Not Implemented\r\n",version[version_no]);
             write(socket, http_string, 30);
-            sprintf(error_string,"<!DOCTYPE html>\r\n<html><body> Not Implemented: Invalid File %s</body></html>\r\n\n",arg);
+            sprintf(error_string,"<!DOCTYPE html>\r\n<html><body> Not Implemented: Invalid File %s</body></html>\r\n",arg);
             write(socket,error_string,strlen(error_string)+1);
             printf("Error code 501!\n");
             break;
@@ -124,7 +96,7 @@ char* error_handling(int err_no,int reason_no,int version_no,char* arg, int sock
 
         case 500:
         {
-            sprintf(http_string,"%s 500 Internal Server Error: cannot allocate memory\r\n\n",version[version_no]);
+            sprintf(http_string,"%s 500 Internal Server Error: cannot allocate memory\r\n",version[version_no]);
             write(socket, http_string, 60);
             printf("Error code 500!\n");
             write(socket,error_string,strlen(error_string)+1);
@@ -134,8 +106,8 @@ char* error_handling(int err_no,int reason_no,int version_no,char* arg, int sock
         default:
         {
 
-            write(socket, "HTTP/1.1 400 Bad Request\n\n", 25);
-            sprintf(error_string,"<html><body> 400  Bad Request Reason: Invalid %s %s</body></html>\n\n",reason[reason_no],arg);
+            write(socket, "HTTP/1.1 400 Bad Request\n", 25);
+            sprintf(error_string,"<html><body> 400  Bad Request Reason: Invalid %s %s</body></html>\n",reason[reason_no],arg);
             write(socket,error_string,strlen(error_string)+1);
             printf("Error code Default!\n");
         }
@@ -144,7 +116,7 @@ char* error_handling(int err_no,int reason_no,int version_no,char* arg, int sock
     printf("Error Handled!\n");
 
 }
-/*
+
 char* content_length(char* path)
 {
     char* final_string = malloc(200);
@@ -169,7 +141,7 @@ char* content_length(char* path)
     strcpy(&final_string[16],length_string);
     return final_string;
 }
-*/
+
 int doesFileExist(const char *filename) 
 {
     struct stat st;
@@ -221,7 +193,7 @@ int socket_creation(char* port)
     freeaddrinfo(res);
 
     // listen for incoming connections
-    if ( listen (socket_desc, 100) != 0 )
+    if ( listen (socket_desc, 50) != 0 )
     {
         printf("listen error");
         exit(1);
@@ -386,14 +358,6 @@ void *thread_inside_thread(void* data_arg)
     int s, file, bytes_read;
     
 
-    pid_t tid;
-
-    //tid =  pthread_self();
-    //tid = gettid();
-    //printf(GRN"Thread ID - %d\n"RESET,tid);
-
-
-
     bzero(recv_buf,sizeof(recv_buf));
     bzero(keep_alive,sizeof(keep_alive));
     struct data_for_tit* data = (struct data_for_tit*)data_arg ;
@@ -415,38 +379,24 @@ void *thread_inside_thread(void* data_arg)
             //int http_1_0 = strncmp( http_cmd[2], "HTTP/1.0", 8);
             int http_1_1 = strncmp( http_cmd[2], "HTTP/1.1", 8);
 
-         /*   const char needle[50] = "Connection: Keepalive";
-            char *ret = malloc(500);
+            const char needle[50] = "Connection: keep-alive";
+            char *ret;
 
-            //bzero(keep_alive,sizeof(keep_alive));
-            //strcpy(&keep_alive,data->buffer);
-            printf(RED "Keep Alive String %s \n" RESET, keep_alive);
-            bzero(ret,sizeof(ret));
+
+            strcpy(&keep_alive,data->buffer);
+            printf(RED "Strcpy %s \n\n\n\n" RESET, keep_alive );
+
             ret = strstr(keep_alive, needle);
-            printf(MAG"Ret - %s\n"RESET,ret );
             
             if(ret!=NULL)
             {
                 struct timeval tv;
-                char* alive_time = data_finder("KeepaliveTime");
-                int time_to_live = atoi(alive_time);
-                tv.tv_sec = time_to_live;
+                tv.tv_sec = 30;       /* Timeout in seconds */
                 setsockopt(sock_client, SOL_SOCKET, SO_SNDTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
                 setsockopt(sock_client, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
-                printf(GRN"Keeping it Alive for %s Seconds\n"RESET,alive_time);
-            }
-            else
-            {
-                struct timeval tv;
-                tv.tv_sec = 0;       
-                setsockopt(sock_client, SOL_SOCKET, SO_SNDTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
-                setsockopt(sock_client, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
-                printf(CYN"Not Keeping it Alive \n"RESET);
-            
-
             }
 
-*/
+
             if (http_1_1!=0 )
             {
                 //write(sock_client, "HTTP/1.1 400 Bad Request\n", 25);
@@ -474,18 +424,15 @@ void *thread_inside_thread(void* data_arg)
                     send(sock_client, "HTTP/1.1 200 OK\n", 16, 0);
 
                     char* content_string = content_type(path_to_file);
-                    //char* content_len = getFilesize(path_to_file);
-
-                    //printf("\n\n\n\n\nContent String%s\nContent Length %s\n",content_string,content_len);
+                    char* content_len = content_length(path_to_file);
+                    //printf("\n\n\n\n\nContent String%s\n",content_string);
                     send(sock_client, content_string, strlen(content_string),0);
-                    //send(sock_client, content_len, strlen(content_len),0);
-                    
                     while ( (bytes_read=read(file, data_to_send, BYTES))>0 )
                     {    
                         write (sock_client, data_to_send, bytes_read);
                         //printf("%s\n",data_to_send);
                     }
-                    printf(GRN"Out of File Sent While Loop %s\n"RESET,path_to_file);
+                    printf(GRN"Out of File Sent While Loop\n"RESET);
                 }
                 else    
                 {
@@ -496,9 +443,8 @@ void *thread_inside_thread(void* data_arg)
                 }
 
             }
-            printf(RED "\n\n-------------Second Order thread Completed ----------------" RESET);
+            printf(RED "\n\n-------------Completed the thread ----------------" RESET);
         }
-        return 0;
 }
 
 
@@ -508,15 +454,36 @@ void *connection_handler(int sock_client)
 {
     
     char recv_buf[MESSAGE_LENGTH],recv_buf_1_1[MESSAGE_LENGTH], *http_cmd[3], data_to_send[BYTES], path_to_file[MESSAGE_LENGTH];
-    char keep_alive[MESSAGE_LENGTH];
 
     int s, file, bytes_read;
 
     bzero(recv_buf,sizeof(recv_buf));
-    bzero(keep_alive,sizeof(keep_alive));
 
+    /*
+    struct socket_info* sock_info_in_child = (struct socket_info*)sock_info_argument ;
+
+    int socket_to_close = sock_info_in_child->parent_socket;
+    int sock_client = sock_info_in_child->child_socket;
+
+    printf("Sockeet to close - %d\n Socket to survive - %d \n",socket_to_close,sock_client );
+
+    close(socket_to_close);
+    */
     printf(YEL"In First Thread --- %d\n\n\n" RESET,sock_client);
+
+    //struct timeval tv;
+ 
+    //tv.tv_sec = 30;       /* Timeout in seconds */
+ 
+    //setsockopt(sock_client, SOL_SOCKET, SO_SNDTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
+    //setsockopt(sock_client, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
+    //setsockopt(sock_client, SOL_TCP, TCP_USER_TIMEOUT,(struct timeval *)&tv,sizeof(struct timeval));
+    
+    //while(1)
+    //{
+    //while((
     s = recv(sock_client, recv_buf, MESSAGE_LENGTH, 0);
+    //{
     printf(YEL"Accepting in slave\n\n"RESET);
 
 
@@ -530,9 +497,15 @@ void *connection_handler(int sock_client)
     }
     else
     {
-        strcpy(recv_buf_1_1,&recv_buf);
-        strcpy(keep_alive,&recv_buf);
-        printf(YEL"%s"RESET, recv_buf);
+        strcpy(&recv_buf_1_1,&recv_buf);
+/*        printf("\n\n\n\n\nCreating a thread\n");
+        if( pthread_create( &second_thread , NULL ,  thread_inside_thread , data) < 0)
+        {
+            perror("could not create thread");
+            exit(1);
+        }
+*/
+        //printf(YEL"%s"RESET, recv_buf);
         http_cmd[0] = strtok (recv_buf, " \t\n");
         if ( strncmp(http_cmd[0], "GET\0", 4)==0 )
         {
@@ -546,108 +519,6 @@ void *connection_handler(int sock_client)
             {
                 //write(sock_client, "HTTP/1.0 400 Bad Request\n", 25);
                 error_handling(400,METHOD,HTTP_1_1,http_cmd[2],sock_client);
-            }
-            else if(http_1_1 == 0)
-            {
-                pthread_t second_thread;
-                struct data_for_tit *data = malloc(sizeof(struct data_for_tit));
-
-                data->buffer = recv_buf_1_1;
-                data->child_socket = sock_client;
-
-                const char needle[50] = "Connection: keep-alive";
-                char *ret = malloc(400);
-                bzero(ret,sizeof(ret));
-                ret = strstr(recv_buf_1_1, needle);
-                if(ret!=NULL)
-                {
-                    struct timeval tv;
-                    char* alive_time = data_finder("KeepaliveTime");
-                    int time_to_live = atoi(alive_time);
-                    tv.tv_sec = time_to_live;       /* Timeout in seconds */
-                    setsockopt(sock_client, SOL_SOCKET, SO_SNDTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
-                    setsockopt(sock_client, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
-                    printf(GRN"Keeping it Alive for %s Seconds\n"RESET,alive_time);
-                }
-                else
-                {
-                    struct timeval tv;
-                    tv.tv_sec = 0;       
-                    setsockopt(sock_client, SOL_SOCKET, SO_SNDTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
-                    setsockopt(sock_client, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
-                    printf(CYN"Not Keeping it Alive \n"RESET);
-                }
-                printf(YEL"\nCreating a thread - First One \n\n"RESET);
-                if( pthread_create( &second_thread , NULL ,  thread_inside_thread , data) < 0)
-                {
-                    perror("could not create thread");
-                    exit(1);
-                }
-
-                
-
-            
-                
-
-                while((s = recv(sock_client, recv_buf, MESSAGE_LENGTH, 0)) > 0)
-                {  
-
-                    if (s == 0)
-                    { 
-                        printf("Client disconnected (recv returns zero).\n");
-                    }
-                    else if(s>0)
-                    {
-                        
-                        bzero(keep_alive,sizeof(keep_alive));
-                        strcpy(keep_alive,&recv_buf);
-                        const char needle[50] = "Connection: keep-alive";
-                        char *ret = malloc(400);
-                        bzero(ret,sizeof(ret));
-                        ret = strstr(keep_alive, needle);
-
-                        if(ret!=NULL)
-                        {
-                            struct timeval tv;
-                            char* alive_time = data_finder("KeepaliveTime");
-                            int time_to_live = atoi(alive_time);
-                            tv.tv_sec = time_to_live;       /* Timeout in seconds */
-                            setsockopt(sock_client, SOL_SOCKET, SO_SNDTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
-                            setsockopt(sock_client, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
-                            printf(GRN"Keeping it Alive for %s Seconds\n"RESET,alive_time);
-                        }
-                        else
-                        {
-                            struct timeval tv;
-                            tv.tv_sec = 0;       
-                            setsockopt(sock_client, SOL_SOCKET, SO_SNDTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
-                            setsockopt(sock_client, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
-                            printf(CYN"Not Keeping it Alive \n"RESET);
-                        }
-
-                        pthread_t third_thread;
-                        struct data_for_tit *data = malloc(sizeof(struct data_for_tit));
-                        printf(GRN"Inside second pthread create \n\n"RESET);
-                        data->buffer = recv_buf;
-                        data->child_socket = sock_client;
-                        printf(YEL"\nCreating a thread_ 2nd \n"RESET);
-                        if( pthread_create( &second_thread , NULL ,  thread_inside_thread , data) < 0)
-                        {
-                            perror("could not create thread");
-                            exit(1);
-                        }
-
-                    }
-                    printf("Inside First Order thread, waiting for timeout\n");
-
-                }
-
-                if( s < 0 )
-                {    
-                        printf("Recieve error\n");
-                }
-
-                printf(RED"Outside First Order Thread, Not waiting anymore\n"RESET);
             }
             else if (http_1_0 == 0)
             {
@@ -671,6 +542,7 @@ void *connection_handler(int sock_client)
                     send(sock_client, "HTTP/1.0 200 OK\n", 16, 0);
 
                     char* content_string = content_type(path_to_file);
+                    //printf("\n\n\n\n\nContent String%s\n",content_string);
                     send(sock_client, content_string, strlen(content_string),0);
                     while ( (bytes_read=read(file, data_to_send, BYTES))>0 )
                     {    
@@ -685,11 +557,65 @@ void *connection_handler(int sock_client)
                     error_handling(404,METHOD,HTTP_1_0,http_cmd[1],sock_client);
                 }
             }
-            
+            else if(http_1_1 == 0)
+            {
+                //pthread_t second_thread;
+                //struct data_for_tit *data = malloc(sizeof(struct data_for_tit));
+        
+                //data->buffer = recv_buf;
+                //data->child_socket = sock_client;
+
+
+                pthread_t second_thread;
+                struct data_for_tit *data = malloc(sizeof(struct data_for_tit));
+
+                data->buffer = recv_buf_1_1;
+                data->child_socket = sock_client;
+
+                printf(YEL"\nCreating a thread \n"RESET);
+                if( pthread_create( &second_thread , NULL ,  thread_inside_thread , data) < 0)
+                {
+                    perror("could not create thread");
+                    exit(1);
+                }
+
+
+                while((s = recv(sock_client, recv_buf, MESSAGE_LENGTH, 0)) > 0)
+                {  
+
+                    if (s == 0)
+                    { 
+                        printf("Client disconnected (recv returns zero).\n");
+                    }
+                    else
+                    {
+                        pthread_t third_thread;
+                        struct data_for_tit *data = malloc(sizeof(struct data_for_tit));
+        
+                        data->buffer = recv_buf;
+                        data->child_socket = sock_client;
+                        printf(YEL"\nCreating a thread_ 2nd \n"RESET);
+                        if( pthread_create( &second_thread , NULL ,  thread_inside_thread , data) < 0)
+                        {
+                            perror("could not create thread");
+                            exit(1);
+                        }
+
+                    }
+
+                }
+                if( s < 0 )
+                {    
+                        printf("Recieve error\n");
+                }
+
+            }
         }
     
     }
-    printf(GRN "\n\n\nOut of First Order  loop\n\n" RESET);
+    //}
+    //Closing SOCKET
+    printf(GRN "\n\n\nOut of while loop\n\n" RESET);
     shutdown (sock_client, SHUT_RDWR);         //All further send and recieve operations are DISABLED...
     close(sock_client);
     sock_client=-1;

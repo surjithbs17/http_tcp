@@ -530,7 +530,6 @@ void *connection_handler(int sock_client)
     }
     else
     {
-        strcpy(recv_buf_1_1,&recv_buf);
         strcpy(keep_alive,&recv_buf);
         printf(YEL"%s"RESET, recv_buf);
         http_cmd[0] = strtok (recv_buf, " \t\n");
@@ -546,108 +545,6 @@ void *connection_handler(int sock_client)
             {
                 //write(sock_client, "HTTP/1.0 400 Bad Request\n", 25);
                 error_handling(400,METHOD,HTTP_1_1,http_cmd[2],sock_client);
-            }
-            else if(http_1_1 == 0)
-            {
-                pthread_t second_thread;
-                struct data_for_tit *data = malloc(sizeof(struct data_for_tit));
-
-                data->buffer = recv_buf_1_1;
-                data->child_socket = sock_client;
-
-                const char needle[50] = "Connection: keep-alive";
-                char *ret = malloc(400);
-                bzero(ret,sizeof(ret));
-                ret = strstr(recv_buf_1_1, needle);
-                if(ret!=NULL)
-                {
-                    struct timeval tv;
-                    char* alive_time = data_finder("KeepaliveTime");
-                    int time_to_live = atoi(alive_time);
-                    tv.tv_sec = time_to_live;       /* Timeout in seconds */
-                    setsockopt(sock_client, SOL_SOCKET, SO_SNDTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
-                    setsockopt(sock_client, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
-                    printf(GRN"Keeping it Alive for %s Seconds\n"RESET,alive_time);
-                }
-                else
-                {
-                    struct timeval tv;
-                    tv.tv_sec = 0;       
-                    setsockopt(sock_client, SOL_SOCKET, SO_SNDTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
-                    setsockopt(sock_client, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
-                    printf(CYN"Not Keeping it Alive \n"RESET);
-                }
-                printf(YEL"\nCreating a thread - First One \n\n"RESET);
-                if( pthread_create( &second_thread , NULL ,  thread_inside_thread , data) < 0)
-                {
-                    perror("could not create thread");
-                    exit(1);
-                }
-
-                
-
-            
-                
-
-                while((s = recv(sock_client, recv_buf, MESSAGE_LENGTH, 0)) > 0)
-                {  
-
-                    if (s == 0)
-                    { 
-                        printf("Client disconnected (recv returns zero).\n");
-                    }
-                    else if(s>0)
-                    {
-                        
-                        bzero(keep_alive,sizeof(keep_alive));
-                        strcpy(keep_alive,&recv_buf);
-                        const char needle[50] = "Connection: keep-alive";
-                        char *ret = malloc(400);
-                        bzero(ret,sizeof(ret));
-                        ret = strstr(keep_alive, needle);
-
-                        if(ret!=NULL)
-                        {
-                            struct timeval tv;
-                            char* alive_time = data_finder("KeepaliveTime");
-                            int time_to_live = atoi(alive_time);
-                            tv.tv_sec = time_to_live;       /* Timeout in seconds */
-                            setsockopt(sock_client, SOL_SOCKET, SO_SNDTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
-                            setsockopt(sock_client, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
-                            printf(GRN"Keeping it Alive for %s Seconds\n"RESET,alive_time);
-                        }
-                        else
-                        {
-                            struct timeval tv;
-                            tv.tv_sec = 0;       
-                            setsockopt(sock_client, SOL_SOCKET, SO_SNDTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
-                            setsockopt(sock_client, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
-                            printf(CYN"Not Keeping it Alive \n"RESET);
-                        }
-
-                        pthread_t third_thread;
-                        struct data_for_tit *data = malloc(sizeof(struct data_for_tit));
-                        printf(GRN"Inside second pthread create \n\n"RESET);
-                        data->buffer = recv_buf;
-                        data->child_socket = sock_client;
-                        printf(YEL"\nCreating a thread_ 2nd \n"RESET);
-                        if( pthread_create( &second_thread , NULL ,  thread_inside_thread , data) < 0)
-                        {
-                            perror("could not create thread");
-                            exit(1);
-                        }
-
-                    }
-                    printf("Inside First Order thread, waiting for timeout\n");
-
-                }
-
-                if( s < 0 )
-                {    
-                        printf("Recieve error\n");
-                }
-
-                printf(RED"Outside First Order Thread, Not waiting anymore\n"RESET);
             }
             else if (http_1_0 == 0)
             {
@@ -685,10 +582,114 @@ void *connection_handler(int sock_client)
                     error_handling(404,METHOD,HTTP_1_0,http_cmd[1],sock_client);
                 }
             }
+            else if(http_1_1 == 0)
+            {
+                pthread_t second_thread;
+                struct data_for_tit *data = malloc(sizeof(struct data_for_tit));
+
+                data->buffer = recv_buf_1_1;
+                data->child_socket = sock_client;
+
+                printf(YEL"\nCreating a thread - First One \n\n"RESET);
+                if( pthread_create( &second_thread , NULL ,  thread_inside_thread , data) < 0)
+                {
+                    perror("could not create thread");
+                    exit(1);
+                }
+
+                const char needle[50] = "Connection: Keepalive";
+                char *ret = malloc(400);
+                ret = strstr(recv_buf_1_1, needle);
+
             
+                if(ret!=NULL)
+                {
+                    struct timeval tv;
+                    char* alive_time = data_finder("KeepaliveTime");
+                    int time_to_live = atoi(alive_time);
+                    tv.tv_sec = time_to_live;       /* Timeout in seconds */
+                    setsockopt(sock_client, SOL_SOCKET, SO_SNDTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
+                    setsockopt(sock_client, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
+                    printf(GRN"Keeping it Alive for %s Seconds\n"RESET,alive_time);
+                }
+                else
+                {
+                    struct timeval tv;
+                    tv.tv_sec = 0;       
+                    setsockopt(sock_client, SOL_SOCKET, SO_SNDTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
+                    setsockopt(sock_client, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
+                    printf(CYN"Not Keeping it Alive \n"RESET);
+                }
+
+
+
+                while((s = recv(sock_client, recv_buf, MESSAGE_LENGTH, 0)) > 0)
+                {  
+
+                    if (s == 0)
+                    { 
+                        printf("Client disconnected (recv returns zero).\n");
+                    }
+                    else
+                    {
+                        
+
+                        const char needle[50] = "Connection: Keepalive";
+                        char *ret = malloc(400);
+                        ret = strstr(keep_alive, needle);
+
+            
+                        if(ret!=NULL)
+                        {
+                            struct timeval tv;
+                            char* alive_time = data_finder("KeepaliveTime");
+                            int time_to_live = atoi(alive_time);
+                            tv.tv_sec = time_to_live;       /* Timeout in seconds */
+                            setsockopt(sock_client, SOL_SOCKET, SO_SNDTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
+                            setsockopt(sock_client, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
+                            printf(GRN"Keeping it Alive for %s Seconds\n"RESET,alive_time);
+                        }
+                        else
+                        {
+                            struct timeval tv;
+                            tv.tv_sec = 0;       
+                            setsockopt(sock_client, SOL_SOCKET, SO_SNDTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
+                            setsockopt(sock_client, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
+                            printf(CYN"Not Keeping it Alive \n"RESET);
+                        }
+
+
+
+
+                        pthread_t third_thread;
+                        struct data_for_tit *data = malloc(sizeof(struct data_for_tit));
+                        printf(GRN"Inside second pthread create \n\n"RESET);
+                        data->buffer = recv_buf;
+                        data->child_socket = sock_client;
+                        printf(YEL"\nCreating a thread_ 2nd \n"RESET);
+                        if( pthread_create( &second_thread , NULL ,  thread_inside_thread , data) < 0)
+                        {
+                            perror("could not create thread");
+                            exit(1);
+                        }
+
+                    }
+                    printf("Inside First Order thread, waiting for timeout\n");
+
+                }
+
+                if( s < 0 )
+                {    
+                        printf("Recieve error\n");
+                }
+
+                printf(RED"Outside First Order Thread, Not waiting anymore\n"RESET);
+            }
         }
     
     }
+    //}
+    //Closing SOCKET
     printf(GRN "\n\n\nOut of First Order  loop\n\n" RESET);
     shutdown (sock_client, SHUT_RDWR);         //All further send and recieve operations are DISABLED...
     close(sock_client);
