@@ -32,6 +32,7 @@
 #define VERSION 2
 #define HTTP_1_0 0
 #define HTTP_1_1 1
+#define HTTP_VERSION 1
 
 char *root_dir; 
 
@@ -88,18 +89,11 @@ char* error_handling(int err_no,int reason_no,int version_no,char* arg, int sock
     {
         case 400:
         {
-            //printf("Passed 3\n");
+    
             sprintf(http_string,"%s 400 Bad Request\n\n",version[version_no]);
-            //printf("Passed 4\n");
             write(socket, http_string, 26);
-
-
-            
-            sprintf(error_string,"<html> <body>400 Bad Request Reason: Invalid %s %s</body></html>\r\n\n",reason[reason_no],arg);
-            //sprintf(error_string,"<html><head><title>404 Not Found</head></title><body><p>404 Not Found: %s %s The requested resource could not be found!</p></body></html>",reason[reason_no],arg);
-            
-            //printf(MAG"%s\n"RESET,error_string );
-            write(socket,error_string,strlen(error_string)+1);
+            sprintf(error_string,"<html>\r\n<body>\r\n<h1>400 Bad Request Reason: Invalid  %s : %s</h1>\r\n\n</body>\r\n</html>\r\n\n",reason[reason_no],arg);
+            write(socket,error_string,strlen(error_string));
             printf("Error code 400!\n");
 
             break;
@@ -107,13 +101,8 @@ char* error_handling(int err_no,int reason_no,int version_no,char* arg, int sock
         case 404:
         {
             sprintf(http_string,"%s 404 Not Found\n\n",version[version_no]);
-
-            //printf(MAG"%s\nHTTP/1.1 404 Not Found\r\n"RESET,http_string );
             write(socket, http_string, 24);
-            //sprintf(error_string,"<html><body><H1>Hello %s world</H1></body></html>",arg);
             sprintf(error_string,"<html>\r\n<body>\r\n<h1>404 Not Found Reason URL does not exist: Invalid  %s %s</h1>\r\n\n</body>\r\n</html>\r\n\n",reason[reason_no],arg);
-            //sprintf(error_string,"<html><head><title>404 Not Found</head></title><body><p>404 Not Found: %s %s The requested resource could not be found!</p></body></html>\r\n\n",reason[reason_no],arg);
-            //printf(MAG"%s\n"RESET,error_string );
             write(socket,error_string,strlen(error_string));
             printf("Error code 404!\n");
             break;
@@ -122,7 +111,7 @@ char* error_handling(int err_no,int reason_no,int version_no,char* arg, int sock
         {
             sprintf(http_string,"%s 501 Not Implemented\n\n",version[version_no]);
             write(socket, http_string, 30);
-            sprintf(error_string,"<html><body> Not Implemented: Invalid File %s</body></html>\r\n\n",arg);
+            sprintf(error_string,"<html>\r\n<body>\r\n<h1>501 Not Implemented : %s </h1>\r\n\n</body>\r\n</html>\r\n\n",arg);
             write(socket,error_string,strlen(error_string)+1);
             printf("Error code 501!\n");
             break;
@@ -261,7 +250,11 @@ char* data_finder(char* format)
 
     while(token != NULL)
     {
-        token = fgets(parsed_string,10000,f);
+        if((token = fgets(parsed_string,10000,f)) == NULL)
+            {
+                return 0;
+                break;
+            }
         //printf(" -- %s",parsed_string);
         if(parsed_string[0] == '#')
         {   
@@ -341,7 +334,12 @@ char* content_type(char* path)
     
     //printf("%s\n",path );
     char* type = find_the_file_format(path);
-    char* type_string = data_finder(type);
+    char* type_string;
+    if((type_string = data_finder(type)) == 0)
+    {
+        
+        return 0;
+    }
     char* final_string = malloc(200);
     
     //printf("%s\n",type_string );
@@ -358,7 +356,22 @@ char* content_type(char* path)
 }
 
 
-
+int error_400(char* input)
+{
+    char *pch;
+    printf("%s\n",input );
+    if((pch = strchr(input,'#')) == NULL)
+    {
+        
+        return 0;
+    }
+    else
+    {
+        printf("ERROR 400 Detected\n");
+        return 1;
+    }
+    
+}
 
 void *thread_inside_thread(void* data_arg)
 {
@@ -381,7 +394,7 @@ void *thread_inside_thread(void* data_arg)
     bzero(keep_alive,sizeof(keep_alive));
     struct data_for_tit* data = (struct data_for_tit*)data_arg ;
 
-    printf("Recieved string from struct - %s \n\n",data->buffer);
+    //printf("Recieved string from struct - %s \n\n",data->buffer);
     //strcpy(recv_buf,data_arg->recv_buf);
     strcpy(&recv_buf,data->buffer);
     strcpy(&post_buf,&recv_buf);
@@ -399,7 +412,14 @@ void *thread_inside_thread(void* data_arg)
             
             //int http_1_0 = strncmp( http_cmd[2], "HTTP/1.0", 8);
             int http_1_1 = strncmp( http_cmd[2], "HTTP/1.1", 8);
+            int err_check = error_400(http_cmd[1]);
+            printf("%d Err Check \n",err_check );
+            if(err_check == 1)
+            {
+                if(http_1_1 == 0)
+                error_handling(400,URL,http_1_1,http_cmd[1],sock_client);
 
+            }
         
             if (http_1_1!=0 )
             {
@@ -425,7 +445,17 @@ void *thread_inside_thread(void* data_arg)
                 {
                     send(sock_client, "HTTP/1.1 200 OK\n", 16, 0);
                     strcpy(path_to_file_copy,path_to_file);
+                    
+
                     char* content_string = content_type(path_to_file);
+                    if(content_string == 0)
+                    {
+                        error_handling(501,URL,HTTP_VERSION,http_cmd[1],sock_client);
+                        goto thread_end;
+                    }
+
+
+
                     char* content_len = getFilesize(path_to_file_copy);
 
                     //printf(WHT"\n\n\n\n\nContent String%s\nContent Length %s\n"RESET,content_string,content_len);
@@ -449,6 +479,7 @@ void *thread_inside_thread(void* data_arg)
                 }
 
             }
+            thread_end:
             printf(GRN "\n\n-------------Second Order thread Completed --------------" RESET);
         }
         else
@@ -500,7 +531,8 @@ void *thread_inside_thread(void* data_arg)
                 FILE * fp;
 
                 fp = fopen ("file.html", "w+");
-                fprintf(fp, "<html>\r\n<body>\r\n<h1>%s  is working in %s</h1>\r\n\n</body>\r\n</html>\r\n\n",user,comp);
+                
+                fprintf(fp, "<html>\r\n<body>\r\n<h1>POST DATA</h1><pre>%s  is working in %s</pre>\r\n\n</body>\r\n</html>\r\n\n",user,comp);
    
                 fclose(fp);
 
@@ -547,10 +579,11 @@ void *thread_inside_thread(void* data_arg)
 
 
 
+
 //client connection
-void *connection_handler(int sock_client)
+void *connection_handler(void* variable)
 {
-    
+    int sock_client = (int) variable;
     char recv_buf[MESSAGE_LENGTH],post_buf[MESSAGE_LENGTH],recv_buf_1_1[MESSAGE_LENGTH], *http_cmd[3], data_to_send[BYTES], path_to_file[MESSAGE_LENGTH],path_to_file_copy[MESSAGE_LENGTH];
     char keep_alive[MESSAGE_LENGTH];
     char *temporary_string,user[10],comp[10]; 
@@ -567,6 +600,8 @@ void *connection_handler(int sock_client)
     //printf(YEL"In First Thread --- %d\n\n\n" RESET,sock_client);
     s = recv(sock_client, recv_buf, MESSAGE_LENGTH, 0);
     printf(YEL"Accepting in slave\n\n"RESET);
+
+
 
 
     if( s < 0 )
@@ -592,6 +627,17 @@ void *connection_handler(int sock_client)
             
             int http_1_0 = strncmp( http_cmd[2], "HTTP/1.0", 8);
             int http_1_1 = strncmp( http_cmd[2], "HTTP/1.1", 8);
+
+            int err_check = error_400(http_cmd[1]);
+            printf("%d Err Check \n",err_check );
+            if(err_check == 1)
+            {
+                if(http_1_0 == 0)
+                error_handling(400,URL,http_1_0,http_cmd[1],sock_client);
+                if(http_1_1 == 0)
+                error_handling(400,URL,http_1_1,http_cmd[1],sock_client);
+
+            }
 
             if ( http_1_0!=0 && http_1_1!=0 )
             {
@@ -620,6 +666,7 @@ void *connection_handler(int sock_client)
                     setsockopt(sock_client, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
                     printf(GRN"Keeping it Alive for %s Seconds\n"RESET,alive_time);
                     data->connection_close = 0;
+                    #define conn_close 0
                 }
                 else
                 {
@@ -629,6 +676,7 @@ void *connection_handler(int sock_client)
                     setsockopt(sock_client, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
                     printf(CYN"Not Keeping it Alive \n"RESET);
                     data->connection_close = 1;
+                    #define conn_close 1
                 }
                 printf(YEL"\nThread Creation in First Thread \n\n"RESET);
                 if( pthread_create( &second_thread , NULL ,  thread_inside_thread , data) < 0)
@@ -711,6 +759,10 @@ void *connection_handler(int sock_client)
             {
                 int check_default =strncmp(http_cmd[1], "/\0", 2);
 
+
+                 #undef HTTP_VERSION
+                 #define HTTP_VERSION 0
+
                 if ( check_default ==0 )
                 {    
                     http_cmd[1] = "/index.html";        
@@ -782,8 +834,8 @@ void *connection_handler(int sock_client)
                 printf("%s\n",path_to_file );
                 char reply_string [MESSAGE_LENGTH];
                 
-                sprintf(reply_string,"<html>\r\n<body>\r\n<h1>%s  is working in %s</h1>\r\n\n</body>\r\n</html>\r\n\n",user,comp);
-                printf("%s\n",reply_string );
+                //sprintf(reply_string,"<html>\r\n<body>\r\n<h1>POST DATA</h1><pre>%s  is working in %s</pre>\r\n\n</body>\r\n</html>\r\n\n",user,comp);
+                //printf("%s\n",reply_string );
 
                 strcpy(&path_to_file[strlen(root_dir)], "/file.html");
                 printf("%s\n",path_to_file );
@@ -792,7 +844,7 @@ void *connection_handler(int sock_client)
                 FILE * fp;
 
                 fp = fopen ("file.html", "w+");
-                fprintf(fp, "<html>\r\n<body>\r\n<h1>%s  is working in %s</h1>\r\n\n</body>\r\n</html>\r\n\n",user,comp);
+                fprintf(fp, "<html>\r\n<body>\r\n<h1>POST DATA</h1><pre>%s  is working in %s</pre>\r\n\n</body>\r\n</html>\r\n\n",user,comp);
    
                 fclose(fp);
                 if ( (file=open(path_to_file, O_RDONLY))!=-1 )    //FILE FOUND
@@ -831,9 +883,15 @@ void *connection_handler(int sock_client)
     }
     skip_the_loop:
     printf(GRN "\n\n\nOut of First Order  loop\n\n" RESET);
-    shutdown (sock_client, SHUT_RDWR);         //All further send and recieve operations are DISABLED...
-    close(sock_client);
+    shutdown (sock_client, SHUT_RDWR); 
+    //printf(" Shut down error"); 
+
+    if(conn_close == 0)       //All further send and recieve operations are DISABLED...
+        close(sock_client);
+    //printf("Closed thread Socket\n");
     sock_client=-1;
+    //printf("Exiting the thread\n");
+    return 0;
 }
  
 int main(int argc , char *argv[])
@@ -866,7 +924,7 @@ int main(int argc , char *argv[])
         //printf(BLU"Accepting in Master\n\n"RESET);
         pthread_t first_thread;
         
-        if( pthread_create( &first_thread , NULL ,  connection_handler , client_sock) < 0)
+        if( pthread_create( &first_thread , NULL ,  &connection_handler , (void *)client_sock) < 0)
         {
             perror("could not create thread");
             exit(1);
