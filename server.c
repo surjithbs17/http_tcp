@@ -1,11 +1,11 @@
 
 #include <stdio.h>
-#include <string.h>    //strlen
-#include <stdlib.h>    //strlen
+#include <string.h>    
+#include <stdlib.h>    
 #include <sys/socket.h>
-#include <arpa/inet.h> //inet_addr
-#include <unistd.h>    //write
-#include <pthread.h> //for threading , link with lpthread
+#include <arpa/inet.h> 
+#include <unistd.h>    
+#include <pthread.h> 
 #include <fcntl.h>
 #include <sys/syscall.h>
 #include <netdb.h>
@@ -54,16 +54,16 @@ char* getFilesize(const char* filename)
     char* size_string = malloc(200);
     bzero(size_string,sizeof(size_string));
     struct stat *file_size;
-    //printf("%s\n\n",filename);
+    
     file_size = malloc(sizeof(struct stat));
     memset(file_size,0,sizeof(file_size));
-    //struct stat st;
+    
     if(stat(filename, file_size) != 0) {
         return 0;
     }
     size_t size =  file_size->st_size;
     sprintf(size_string,"Content-Length: %d\r\n\n",(int)size);
-    //printf(MAG"%s \n"RESET,size_string );
+    
     return size_string;
 }
 
@@ -226,7 +226,11 @@ char* data_finder(char* format)
     FILE *f;
     bzero(content_parsed,sizeof(content_parsed));
     //bzero(content_parsed[1],sizeof(content_parsed[1]));   
-    f = fopen("ws.conf", "r");
+    if((f = fopen("ws.conf", "r")) == NULL)
+    {
+        printf(RED"ws.conf file not found\n"RESET);
+        exit(1);
+    }
 
     port = strcmp(format,"port");
     if(port == 0)
@@ -402,11 +406,13 @@ void *thread_inside_thread(void* data_arg)
     int sock_client  = data->child_socket;
     int conn_close = data->connection_close;
     
+    //printf("\nConnection Close - %d\n",conn_close);
 
         //printf("%s", recv_buf);
         http_cmd[0] = strtok (recv_buf, " \t\n");
         if ( strncmp(http_cmd[0], "GET\0", 4)==0 )
         {
+            //printf("\nConnection Close 1- %d\n",conn_close);
             http_cmd[1] = strtok (NULL, " \t");
             http_cmd[2] = strtok (NULL, " \t\n");
             
@@ -468,7 +474,8 @@ void *thread_inside_thread(void* data_arg)
                         write (sock_client, data_to_send, bytes_read);
                         //printf("%s\n",data_to_send);
                     }
-                    printf(GRN"File Sent Successfully %s\n"RESET,path_to_file);
+                    printf(GRN"File Sent Successfully \n"RESET);
+                
                 }
                 else    
                 {
@@ -477,8 +484,9 @@ void *thread_inside_thread(void* data_arg)
                     error_handling(404,METHOD,HTTP_1_1,http_cmd[1],sock_client);
 
                 }
-
+                //printf("Checking \n");
             }
+            //printf("Checking \n");
             thread_end:
             printf(GRN "\n\n-------------Second Order thread Completed --------------" RESET);
         }
@@ -489,8 +497,6 @@ void *thread_inside_thread(void* data_arg)
             {
                 
 
-                printf("passed primary");
-                printf("It is a post string\n");
                 
                 const char sen1[7] = "user=";
 
@@ -498,17 +504,17 @@ void *thread_inside_thread(void* data_arg)
 
                 const char sen3[8] = "comp=";
 
-                printf("What the fuck? second\n" );
-                printf("%s\n",post_buf);
+                
+                //printf("%s\n",post_buf);
                 char* new_string = strstr(post_buf,sen1);
-                printf("%s\n",new_string);
+                //printf("%s\n",new_string);
                 char* second_new_string = strstr(new_string,sen2);
-                printf("%s\n",second_new_string);
+                //printf("%s\n",second_new_string);
                 int user_length = second_new_string-new_string;
-                printf("Length %d\n",user_length);
+                //printf("Length %d\n",user_length);
                 int string_length = strlen(new_string);
                 int comp_length = string_length-user_length;
-                printf("Length %d\n",user_length);
+                //printf("Length %d\n",user_length);
 
                 strncpy(user,new_string+5,user_length-5);
                 strncpy(comp,second_new_string+6,comp_length-5);
@@ -518,14 +524,14 @@ void *thread_inside_thread(void* data_arg)
 
 
                 strcpy(path_to_file, root_dir);
-                printf("%s\n",path_to_file );
+                //printf("%s\n",path_to_file );
                 char reply_string [MESSAGE_LENGTH];
                 
-                sprintf(reply_string,"<html>\r\n<body>\r\n<h1>%s  is working in %s</h1>\r\n\n</body>\r\n</html>\r\n\n",user,comp);
-                printf("%s\n",reply_string );
+                //sprintf(reply_string,"<html>\r\n<body>\r\n<h1>%s  is working in %s</h1>\r\n\n</body>\r\n</html>\r\n\n",user,comp);
+                //printf("%s\n",reply_string );
 
                 strcpy(&path_to_file[strlen(root_dir)], "/file.html");
-                printf("%s\n",path_to_file );
+                //printf("%s\n",path_to_file );
 
 
                 FILE * fp;
@@ -537,7 +543,7 @@ void *thread_inside_thread(void* data_arg)
                 fclose(fp);
 
                 
-                printf("Done\n" );
+                //printf("Done\n" );
                 if ( (file=open(path_to_file, O_RDONLY))!=-1 )    //FILE FOUND
                 {
                     //char* path_to_file_copy = 
@@ -568,8 +574,12 @@ void *thread_inside_thread(void* data_arg)
             }
         }
 
-        if(close == 1 )
+
+        //printf("\nConnection Close - %d\n",conn_close);
+        if(conn_close == 1 )
         {
+            //printf("Closing inside thread inside thread\n");
+            shutdown (sock_client, SHUT_RDWR);
             close(sock_client);
             printf(RED"Closing the Socket\n\n"RESET);
         }
@@ -587,6 +597,7 @@ void *connection_handler(void* variable)
     char recv_buf[MESSAGE_LENGTH],post_buf[MESSAGE_LENGTH],recv_buf_1_1[MESSAGE_LENGTH], *http_cmd[3], data_to_send[BYTES], path_to_file[MESSAGE_LENGTH],path_to_file_copy[MESSAGE_LENGTH];
     char keep_alive[MESSAGE_LENGTH];
     char *temporary_string,user[10],comp[10]; 
+    int conn_close;
 
     int s, file, bytes_read;
 
@@ -629,7 +640,7 @@ void *connection_handler(void* variable)
             int http_1_1 = strncmp( http_cmd[2], "HTTP/1.1", 8);
 
             int err_check = error_400(http_cmd[1]);
-            printf("%d Err Check \n",err_check );
+            //printf("%d Err Check \n",err_check );
             if(err_check == 1)
             {
                 if(http_1_0 == 0)
@@ -666,7 +677,7 @@ void *connection_handler(void* variable)
                     setsockopt(sock_client, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
                     printf(GRN"Keeping it Alive for %s Seconds\n"RESET,alive_time);
                     data->connection_close = 0;
-                    #define conn_close 0
+                    conn_close =  0;
                 }
                 else
                 {
@@ -676,7 +687,7 @@ void *connection_handler(void* variable)
                     setsockopt(sock_client, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
                     printf(CYN"Not Keeping it Alive \n"RESET);
                     data->connection_close = 1;
-                    #define conn_close 1
+                    conn_close = 1;
                 }
                 printf(YEL"\nThread Creation in First Thread \n\n"RESET);
                 if( pthread_create( &second_thread , NULL ,  thread_inside_thread , data) < 0)
@@ -684,13 +695,13 @@ void *connection_handler(void* variable)
                     perror("could not create thread");
                     exit(1);
                 }
-                if(data->connection_close == 1)
+             /*   if(data->connection_close == 1)
                 {
                     printf(RED"\nClosing the Connection,because of inactivity\n"RESET);
                     goto skip_the_loop;
                     
                 }
-
+*/
                
 
                 while((s = recv(sock_client, recv_buf, MESSAGE_LENGTH, 0)) > 0)
@@ -719,7 +730,8 @@ void *connection_handler(void* variable)
                             setsockopt(sock_client, SOL_SOCKET, SO_SNDTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
                             setsockopt(sock_client, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
                             printf(GRN"Keeping it Alive for %s Seconds\n"RESET,alive_time);
-                            data->connection_close = 1;
+                            data->connection_close = 0;
+                            conn_close =  0;
                         }
                         else
                         {
@@ -728,15 +740,26 @@ void *connection_handler(void* variable)
                             setsockopt(sock_client, SOL_SOCKET, SO_SNDTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
                             setsockopt(sock_client, SOL_SOCKET, SO_RCVTIMEO,(struct timeval *)&tv,sizeof(struct timeval));
                             printf(CYN"Not Keeping it Alive \n"RESET);
-                            data->connection_close = 0;
+                            data->connection_close = 1;
+                            data->connection_close = 1;
+                            conn_close =  1;
+                            //printf("Connection close - at setsock - %d",data->connection_close);
+
                         }
 
                         pthread_t third_thread;
                         struct data_for_tit *data = malloc(sizeof(struct data_for_tit));
-                        printf(GRN"Inside second pthread create \n\n"RESET);
+                        //printf(GRN"Inside second pthread create \n\n"RESET);
                         data->buffer = recv_buf;
                         data->child_socket = sock_client;
-                        printf(YEL"\nCreating a thread_ 2nd \n"RESET);
+                        //printf(YEL"\nCreating a thread_ 2nd \n"RESET);
+                        if(conn_close == 1)
+                        {
+                            //printf("Connection close - before - %d",data->connection_close);
+                            data->connection_close = 1;
+                            //printf("Connection close - after - %d",data->connection_close);
+                        }
+                        //printf("Connection close - origin - %d",data->connection_close);
                         if( pthread_create( &second_thread , NULL ,  thread_inside_thread , data) < 0)
                         {
                             perror("could not create thread");
@@ -803,8 +826,6 @@ void *connection_handler(void* variable)
             {
                 
 
-                printf("passed primary");
-                printf("It is a post string\n");
                 
                 const char sen1[7] = "user=";
 
@@ -812,16 +833,16 @@ void *connection_handler(void* variable)
 
                 const char sen3[8] = "comp=";
 
-                printf("What the fuck? first\n" );
+                
                 char* new_string = strstr(post_buf,sen1);
-                printf("%s\n",new_string);
+                //printf("%s\n",new_string);
                 char* second_new_string = strstr(new_string,sen2);
-                printf("%s\n",second_new_string);
+                //printf("%s\n",second_new_string);
                 int user_length = second_new_string-new_string;
-                printf("Length %d\n",user_length);
+                //printf("Length %d\n",user_length);
                 int string_length = strlen(new_string);
                 int comp_length = string_length-user_length;
-                printf("Length %d\n",user_length);
+                //printf("Length %d\n",user_length);
 
                 strncpy(user,new_string+5,user_length-5);
                 strncpy(comp,second_new_string+6,comp_length-5);
@@ -831,14 +852,14 @@ void *connection_handler(void* variable)
 
 
                 strcpy(path_to_file, root_dir);
-                printf("%s\n",path_to_file );
+                //printf("%s\n",path_to_file );
                 char reply_string [MESSAGE_LENGTH];
                 
                 //sprintf(reply_string,"<html>\r\n<body>\r\n<h1>POST DATA</h1><pre>%s  is working in %s</pre>\r\n\n</body>\r\n</html>\r\n\n",user,comp);
                 //printf("%s\n",reply_string );
 
                 strcpy(&path_to_file[strlen(root_dir)], "/file.html");
-                printf("%s\n",path_to_file );
+                //printf("%s\n",path_to_file );
 
 
                 FILE * fp;
@@ -883,11 +904,16 @@ void *connection_handler(void* variable)
     }
     skip_the_loop:
     printf(GRN "\n\n\nOut of First Order  loop\n\n" RESET);
-    shutdown (sock_client, SHUT_RDWR); 
+     
     //printf(" Shut down error"); 
 
     if(conn_close == 0)       //All further send and recieve operations are DISABLED...
+    {    
+        printf("Closing in main thread\n");
+        shutdown (sock_client, SHUT_RDWR);
         close(sock_client);
+     
+    }
     //printf("Closed thread Socket\n");
     sock_client=-1;
     //printf("Exiting the thread\n");
@@ -908,6 +934,14 @@ int main(int argc , char *argv[])
     //printf("\n Time to live - %d",time_to_live);
 
     port = data_finder("port");
+    int num_port = atoi(port);
+
+    printf("%s -  %d\n",port,num_port );
+    if(num_port < 1024)
+    {
+        printf(RED"Port Number is less than 1024, change it in ws.conf file and restart the webserver- %d\n"RESET,num_port );
+        exit(1);
+    }
     socket_desc = socket_creation(port);
     int optval = 1;
     setsockopt(socket_desc, SOL_SOCKET, SO_REUSEADDR,(const void *)&optval , sizeof(int));

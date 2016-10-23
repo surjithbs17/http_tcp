@@ -1,9 +1,0 @@
-GET /index.html HTTP/1.1
-Host: localhost
-Connection: Keepalive
-
-
-GET /index.html HTTP/1.1
-Host: localhost
-
- 127.0.0.1 2004
